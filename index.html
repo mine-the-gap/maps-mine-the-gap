@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COG Multi-Layer Explorer | minethegap.eu</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        #map { height: calc(100vh - 80px); width: 100%; }
+        .custom-loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+
+    <header class="h-20 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6 shadow-lg">
+        <div class="flex items-center space-x-4">
+            <div class="flex flex-col">
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                    Resource COG Explorer
+                </h1>
+                <span class="text-[10px] text-gray-500 uppercase tracking-widest">maps.minethegap.eu</span>
+            </div>
+            <div id="loading-spinner" class="hidden ml-4 custom-loader"></div>
+        </div>
+        <div class="flex items-center gap-4">
+            <label for="layer-select" class="text-sm font-medium text-gray-400 uppercase tracking-wider">Active Layer:</label>
+            <select id="layer-select" class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">Loading bands...</option>
+            </select>
+        </div>
+    </header>
+
+    <main class="relative">
+        <div id="map"></div>
+
+        <div id="data-panel" class="absolute bottom-6 right-6 z-[1000] w-72 bg-gray-800/95 backdrop-blur border border-gray-700 rounded-xl shadow-2xl p-4 hidden">
+            <div class="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+                <h3 class="font-bold text-blue-400">Location Data</h3>
+                <button onclick="document.getElementById('data-panel').classList.add('hidden')" class="text-gray-500 hover:text-white">✕</button>
+            </div>
+            <div id="pixel-values" class="space-y-2 text-sm"></div>
+            <div class="mt-4 text-[10px] text-gray-500 italic">
+                Coordinates: <span id="coords-display">-</span>
+            </div>
+        </div>
+
+        <div id="error-toast" class="fixed top-24 left-1/2 -translate-x-1/2 z-[2000] bg-red-900/90 border border-red-500 text-white px-6 py-3 rounded-full shadow-2xl hidden">
+            <span id="error-message"></span>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/chroma-js"></script>
+
+    <script>
+        let map, currentLayer, geoRaster;
+        const spinner = document.getElementById('loading-spinner');
+        const layerSelect = document.getElementById('layer-select');
+        const dataPanel = document.getElementById('data-panel');
+        const pixelValuesDiv = document.getElementById('pixel-values');
+        const coordsDisplay = document.getElementById('coords-display');
+        const errorToast = document.getElementById('error-toast');
+        const errorMessage = document.getElementById('error-message');
+
+        const COG_URL = "material_areas_km2.tif";
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorToast.classList.remove('hidden');
+            setTimeout(() => errorToast.classList.add('hidden'), 10000);
+        }
+
+        async function init() {
+            map = L.map('map', { center: [0, 0], zoom: 2, zoomControl: false });
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
+            }).addTo(map);
+
+            try {
+                spinner.classList.remove('hidden');
+                const response = await fetch(COG_URL);
+                if (!response.ok) throw new Error(`Could not find ${COG_URL}.`);
+
+                const arrayBuffer = await response.arrayBuffer();
+                geoRaster = await parseGeoraster(arrayBuffer);
+
+                layerSelect.innerHTML = '';
+                const bandNames = ["Gold", "Copper", "Iron", "Lithium", "Silver", "Cobalt"];
+                
+                for(let i = 0; i < geoRaster.numberOfRasters; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = bandNames[i] || `Layer ${i + 1}`;
+                    layerSelect.appendChild(option);
+                }
+
+                updateLayer(0);
+                map.fitBounds([[geoRaster.ymin, geoRaster.xmin], [geoRaster.ymax, geoRaster.xmax]]);
+                spinner.classList.add('hidden');
+            } catch (error) {
+                spinner.classList.add('hidden');
+                showError(error.message);
+            }
+
+            map.on('click', handleMapClick);
+        }
+
+        function updateLayer(bandIndex) {
+            if (currentLayer) map.removeLayer(currentLayer);
+
+            const min = geoRaster.mins[bandIndex];
+            const max = geoRaster.maxs[bandIndex];
+            const scale = chroma.scale(['#111827', '#10b981', '#3b82f6', '#fbbf24']).domain([min, max]);
+
+            currentLayer = new GeoRasterLayer({
+                georaster: geoRaster,
+                opacity: 0.8,
+                pixelValuesToColorFn: values => {
+                    const val = values[bandIndex];
+                    if (val === geoRaster.noDataValue || val <= 0 || isNaN(val)) return null;
+                    return scale(val).hex();
+                },
+                resolution: 128
+            });
+            currentLayer.addTo(map);
+        }
+
+        function handleMapClick(e) {
+            const { lat, lng } = e.latlng;
+            const x = Math.floor((lng - geoRaster.xmin) / geoRaster.pixelWidth);
+            const y = Math.floor((geoRaster.ymax - lat) / geoRaster.pixelHeight);
+
+            if (x >= 0 && x < geoRaster.width && y >= 0 && y < geoRaster.height) {
+                dataPanel.classList.remove('hidden');
+                coordsDisplay.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                pixelValuesDiv.innerHTML = '';
+                
+                for(let i = 0; i < geoRaster.numberOfRasters; i++) {
+                    const val = geoRaster.values[i][y][x];
+                    const label = layerSelect.options[i].textContent;
+                    const isSelected = layerSelect.value == i;
+                    
+                    const row = document.createElement('div');
+                    row.className = `flex justify-between p-2 rounded ${isSelected ? 'bg-blue-900/40 border border-blue-500/30' : 'bg-gray-700/50'}`;
+                    row.innerHTML = `
+                        <span class="${isSelected ? 'font-bold text-blue-300' : 'text-gray-300'}">${label}</span>
+                        <span class="font-mono text-emerald-400">${(val === geoRaster.noDataValue || val < 0) ? '0' : val.toLocaleString()} km²</span>
+                    `;
+                    pixelValuesDiv.appendChild(row);
+                }
+            } else {
+                dataPanel.classList.add('hidden');
+            }
+        }
+
+        layerSelect.addEventListener('change', (e) => updateLayer(parseInt(e.target.value)));
+        window.onload = init;
+    </script>
+</body>
+</html>
