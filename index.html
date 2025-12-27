@@ -1,239 +1,112 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>Global Material Areas Explorer</title>
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resource Explorer | Mineral Density</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+    <script src="https://unpkg.com/geoblaze"></script>
+
     <style>
-        #map { height: calc(100vh - 64px); width: 100%; background: #020617; }
-        .custom-loader {
-            border: 2px solid rgba(59, 130, 246, 0.2);
-            border-top: 2px solid #3b82f6;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 0.8s linear infinite;
+        body { margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+        #map { height: 100vh; width: 100vw; background: #222; }
+        #controls {
+            position: absolute; top: 20px; right: 20px; z-index: 1000;
+            background: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); width: 250px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        body { overflow: hidden; margin: 0; padding: 0; }
-        
-        /* Custom Leaflet Controls Styling */
-        .leaflet-bar { border: none !important; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important; }
-        .leaflet-bar a { background-color: #1e293b !important; color: #f8fafc !important; border-bottom: 1px solid #334155 !important; }
-        .leaflet-bar a:hover { background-color: #334155 !important; }
+        select { width: 100%; padding: 8px; margin-top: 10px; cursor: pointer; }
+        .legend { font-size: 12px; color: #666; margin-bottom: 5px; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans">
+<body>
 
-    <header class="h-16 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 shadow-xl relative z-[2000]">
-        <div class="flex items-center space-x-4">
-            <div class="flex flex-col">
-                <h1 class="text-base font-bold tracking-tight text-white leading-none mb-1">Mineral Density Explorer</h1>
-                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Global Resource Distribution</p>
-            </div>
-            <div id="loading-spinner" class="hidden custom-loader"></div>
-        </div>
-        
-        <div class="flex items-center space-x-3">
-            <span class="text-xs text-slate-400 font-medium hidden sm:inline-block uppercase tracking-tighter">Current Layer</span>
-            <select id="layer-select" class="bg-slate-800 border border-slate-700 text-xs font-semibold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none min-w-[140px] text-slate-200 cursor-pointer hover:bg-slate-750 transition-colors">
-                <option value="">Connecting...</option>
-            </select>
-        </div>
-    </header>
+<div id="controls">
+    <div class="legend">SELECT MATERIAL LAYER</div>
+    <select id="layer-select"></select>
+    <div id="pixel-info" style="margin-top: 15px; font-size: 13px; max-height: 300px; overflow-y: auto;">
+        Click map to query all layers
+    </div>
+</div>
 
-    <main class="relative">
-        <div id="map"></div>
+<div id="map"></div>
 
-        <!-- Tooltip / Info Panel -->
-        <div id="data-panel" class="absolute bottom-8 left-1/2 -translate-x-1/2 md:left-auto md:right-8 md:translate-x-0 z-[1000] w-[90%] md:w-80 bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-5 hidden transition-all duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <div class="flex flex-col">
-                    <span class="text-[10px] text-slate-500 uppercase font-extrabold tracking-widest">Coordinates</span>
-                    <span id="coords-display" class="text-xs font-mono text-blue-400">0.00, 0.00</span>
-                </div>
-                <button onclick="document.getElementById('data-panel').classList.add('hidden')" class="p-1.5 hover:bg-slate-800 rounded-full transition-colors">
-                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            <div id="pixel-values" class="space-y-2"></div>
-        </div>
+<script>
+    const cogUrl = "material_areas_km2.tif"; // Ensure this is in the same folder
+    const NODATA = 65535;
+    
+    // Layer descriptions from your metadata
+    const materialNames = ["Gold", "Coal", "Silver", "Copper", "Iron", "Zinc", "Molybdenum", "Lead", "Potash", "Lithium", "Nickel", "Cobalt", "Platinum_Group_Element", "Diamonds", "Phosphate", "Aluminium", "Magnetite", "Uranium", "Manganese", "Magnesium", "Rhodium", "Potassium", "Spodumene", "Zircon", "Tin", "Heavy_Mineral_Sands", "Titanium", "Rare_Earth_Element", "Rhenium", "Tungsten", "Chromite", "Antimony", "Niobium", "Vanadium", "Tantalum", "Calcine", "Kaolin", "Leucoxene", "Graphite", "Chromium", "Bismuth", "Ferrochrome", "Rubidium", "Mercury", "Cadmium", "Selenium", "Tellurium", "Arsenic", "Ferronickel", "Sulphuric_Acid", "Gallium", "Strontium", "Germanium", "Indium", "Limestone", "Calcium_Carbonate", "Barite", "Ammonium_Sulfate", "Coke", "Crude_Oil", "Tar", "Sodium_Tripolyphosphate", "Asbestos", "Ferroniobium", "Beryllium", "Garnet", "Ferrovanadium", "Caesium", "Ferrotungsten", "Aggregates", "Hematite", "Dolomite", "Nepheline", "Silica", "Sulfur", "Marble", "Borates", "Rutile", "Vermiculite", "Pyrite", "Gypsum", "Frac_Sand", "Emerald", "Beryl", "Sapphire", "Fluorspar"];
 
-        <!-- Notification Center -->
-        <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[3000] bg-slate-900 border border-slate-700 text-white px-6 py-3 rounded-full text-sm font-medium shadow-2xl transition-all transform opacity-0 pointer-events-none">
-            <span id="toast-message"></span>
-        </div>
-    </main>
+    // Initialize Map
+    const map = L.map('map').setView([20, 0], 2);
 
-    <!-- Dependencies -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
-    <script src="https://unpkg.com/georaster-layer-for-leaflet@3.10.0/dist/georaster-layer-for-leaflet.min.js"></script>
-    <script src="https://unpkg.com/chroma-js@2.4.2/chroma.min.js"></script>
+    const baseMaps = {
+        "Map": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map),
+        "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' })
+    };
+    L.control.layers(baseMaps).addto(map);
 
-    <script>
-        (function() {
-            let map, currentLayer, geoRaster;
-            const spinner = document.getElementById('loading-spinner');
-            const layerSelect = document.getElementById('layer-select');
-            const dataPanel = document.getElementById('data-panel');
-            const pixelValuesDiv = document.getElementById('pixel-values');
-            const coordsDisplay = document.getElementById('coords-display');
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
+    let geoRasterLayer;
+    let currentRaster;
 
-            const COG_FILENAME = "material_areas_km2.tif";
-            const BAND_NAMES = ["Gold", "Copper", "Iron", "Lithium", "Silver", "Cobalt"];
+    // Populate Dropdown
+    const select = document.getElementById('layer-select');
+    materialNames.forEach((name, index) => {
+        const opt = document.createElement('option');
+        opt.value = index;
+        opt.innerHTML = name.replace(/_/g, ' ');
+        select.appendChild(opt);
+    });
 
-            function showToast(msg, isError = false) {
-                toastMessage.textContent = msg;
-                toast.classList.remove('opacity-0', 'pointer-events-none');
-                toast.classList.add('opacity-100');
-                if (isError) toast.classList.add('border-rose-500/50', 'text-rose-400');
-                
-                setTimeout(() => {
-                    toast.classList.remove('opacity-100');
-                    toast.classList.add('opacity-0', 'pointer-events-none');
-                }, 4000);
-            }
+    // Load COG
+    parseGeoraster(cogUrl).then(georaster => {
+        currentRaster = georaster;
+        updateLayer(0); // Start with Gold (Band 1)
 
-            async function init() {
-                // Dark Matter Base Map
-                map = L.map('map', { 
-                    center: [20, 0], 
-                    zoom: 3, 
-                    zoomControl: false, 
-                    attributionControl: false,
-                    maxBounds: [[-90, -180], [90, 180]]
+        // Dropdown interaction
+        select.onchange = (e) => updateLayer(parseInt(e.target.value));
+
+        // Click interaction
+        map.on('click', e => {
+            const results = geoblaze.identify(georaster, [e.latlng.lng, e.latlng.lat]);
+            let html = `<strong>Location:</strong> ${e.latlng.lat.toFixed(2)}, ${e.latlng.lng.toFixed(2)}<br><hr>`;
+            
+            if (results) {
+                results.forEach((val, i) => {
+                    if (val !== NODATA && val !== null) {
+                        const area = (val / 10).toFixed(1);
+                        html += `<div><strong>${materialNames[i].replace(/_/g, ' ')}:</strong> ${area} km²</div>`;
+                    }
                 });
-                
-                L.control.attribution({ position: 'bottomleft', prefix: 'minethegap.eu' }).addTo(map);
-                L.control.zoom({ position: 'topright' }).addTo(map);
-
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 10
-                }).addTo(map);
-
-                try {
-                    spinner.classList.remove('hidden');
-                    
-                    // Direct Path Resolution
-                    const currentUrl = new URL(window.location.href);
-                    const basePath = currentUrl.pathname.substring(0, currentUrl.pathname.lastIndexOf('/') + 1);
-                    const cogUrl = `${currentUrl.origin}${basePath}${COG_FILENAME}`;
-
-                    console.log("Attempting to load COG from:", cogUrl);
-                    
-                    const response = await fetch(cogUrl);
-                    if (!response.ok) throw new Error("COG file not accessible.");
-
-                    const arrayBuffer = await response.arrayBuffer();
-                    geoRaster = await parseGeoraster(arrayBuffer);
-
-                    // Setup UI based on file
-                    layerSelect.innerHTML = '';
-                    for (let i = 0; i < geoRaster.numberOfRasters; i++) {
-                        const option = document.createElement('option');
-                        option.value = i;
-                        option.textContent = BAND_NAMES[i] || `Layer ${i + 1}`;
-                        layerSelect.appendChild(option);
-                    }
-
-                    // Initial display
-                    updateLayer(0);
-                    
-                    if (geoRaster.xmin !== undefined) {
-                        map.fitBounds([[geoRaster.ymin, geoRaster.xmin], [geoRaster.ymax, geoRaster.xmax]]);
-                    }
-                    
-                    spinner.classList.add('hidden');
-                } catch (err) {
-                    spinner.classList.add('hidden');
-                    showToast("Error loading dataset: " + err.message, true);
-                    console.error(err);
-                }
-
-                map.on('click', handleMapClick);
+            } else {
+                html += "No data at this location.";
             }
+            document.getElementById('pixel-info').innerHTML = html;
+        });
+    });
 
-            function updateLayer(bandIndex) {
-                if (currentLayer) map.removeLayer(currentLayer);
+    function updateLayer(bandIndex) {
+        if (geoRasterLayer) map.removeLayer(geoRasterLayer);
 
-                // Use better statistical bounds for color scaling
-                const min = geoRaster.mins[bandIndex] || 0;
-                const max = geoRaster.maxs[bandIndex] || 1000;
-                
-                // Mineral-focused palette: Green -> Blue -> Amber (Hotspots)
-                const scale = chroma.scale(['rgba(16, 185, 129, 0.1)', '#10b981', '#3b82f6', '#f59e0b', '#ef4444'])
-                                   .domain([min, max * 0.1, max * 0.4, max * 0.7, max]);
+        geoRasterLayer = new GeoRasterLayer({
+            georaster: currentRaster,
+            opacity: 0.8,
+            pixelValuesToColorFn: values => {
+                const val = values[bandIndex];
+                if (val === NODATA || val === 0) return null;
+                // Simple Ramp: Higher density = deeper purple/red
+                return val > 1000 ? '#800026' : val > 500 ? '#E31A1C' : '#FEB24C';
+            },
+            resolution: 256
+        });
+        geoRasterLayer.addTo(map);
+    }
+</script>
 
-                currentLayer = new GeoRasterLayer({
-                    georaster: geoRaster,
-                    opacity: 0.85,
-                    pixelValuesToColorFn: (values) => {
-                        const val = values[bandIndex];
-                        if (val === geoRaster.noDataValue || isNaN(val) || val <= 0) return null;
-                        return scale(val).hex();
-                    },
-                    resolution: 64 // Faster rendering for 200K file
-                });
-                
-                currentLayer.addTo(map);
-            }
-
-            function handleMapClick(e) {
-                if (!geoRaster) return;
-                
-                const { lat, lng } = e.latlng;
-                const x = Math.floor((lng - geoRaster.xmin) / geoRaster.pixelWidth);
-                const y = Math.floor((geoRaster.ymax - lat) / geoRaster.pixelHeight);
-
-                if (x >= 0 && x < geoRaster.width && y >= 0 && y < geoRaster.height) {
-                    let hasData = false;
-                    const results = [];
-                    
-                    for (let i = 0; i < geoRaster.numberOfRasters; i++) {
-                        const val = geoRaster.values[i][y][x];
-                        const isValid = (val !== geoRaster.noDataValue && !isNaN(val) && val > 0);
-                        if (isValid) hasData = true;
-
-                        results.push({
-                            label: BAND_NAMES[i] || `Layer ${i + 1}`,
-                            value: isValid ? val : 0,
-                            isSelected: layerSelect.value == i
-                        });
-                    }
-
-                    if (hasData) {
-                        dataPanel.classList.remove('hidden');
-                        coordsDisplay.textContent = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
-                        pixelValuesDiv.innerHTML = results.map(res => `
-                            <div class="flex justify-between items-center p-2.5 rounded-xl border ${res.isSelected ? 'bg-blue-500/10 border-blue-500/30' : 'bg-slate-800/40 border-transparent'}">
-                                <span class="text-[11px] ${res.isSelected ? 'font-bold text-blue-300' : 'text-slate-400'}">${res.label}</span>
-                                <span class="text-xs font-mono font-bold ${res.value > 0 ? 'text-emerald-400' : 'text-slate-600'}">
-                                    ${res.value.toLocaleString(undefined, {maximumFractionDigits: 3})}
-                                    <span class="text-[9px] font-normal opacity-50 ml-0.5">km²</span>
-                                </span>
-                            </div>
-                        `).join('');
-                    } else {
-                        dataPanel.classList.add('hidden');
-                    }
-                } else {
-                    dataPanel.classList.add('hidden');
-                }
-            }
-
-            layerSelect.addEventListener('change', (e) => {
-                updateLayer(parseInt(e.target.value));
-            });
-
-            window.addEventListener('load', init);
-        })();
-    </script>
 </body>
 </html>
