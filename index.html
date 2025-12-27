@@ -1,125 +1,389 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Global Material Areas Explorer</title>
+    <title>Global Mining Explorer | MINE-THE-GAP</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
+    <!-- Leaflet & GeoTIFF.js -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
 
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; background: #121212; }
-        #map { height: 100vh; width: 100vw; }
-        #ui-panel {
-            position: absolute; top: 15px; right: 15px; z-index: 1000;
-            background: white; padding: 18px; border-radius: 10px;
-            width: 280px; box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        :root {
+            --primary-dark: #1a1a1c;
+            --header-bg: #454548; 
+            --accent-red: #e63946;
+            --yellow-light: #f6ae2d; 
+            --text-main: #3c4043;
+            --bg-glass: rgba(255, 255, 255, 0.94);
+            --header-height: 50px; 
         }
-        select { width: 100%; padding: 10px; margin-top: 10px; border-radius: 5px; border: 1px solid #ddd; font-weight: 500; }
-        #pixel-info { font-size: 13px; margin-top: 15px; max-height: 300px; overflow-y: auto; border-top: 1px solid #eee; padding-top: 10px; }
-        .val-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f9f9f9; }
-        .val-num { font-weight: bold; color: #e63946; }
-        .hint { font-size: 11px; color: #888; margin-top: 5px; font-style: italic; }
+
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: #000; 
+            color: var(--text-main); 
+            overflow: hidden; 
+        }
+        
+        #nav-header {
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            right: 0; 
+            height: var(--header-height);
+            background: var(--header-bg); 
+            display: flex; 
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px; 
+            z-index: 2000; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .brand {
+            color: #ffffff; 
+            text-decoration: none; 
+            font-weight: 900;
+            font-size: 1.2rem; 
+            letter-spacing: 0.5px;
+        }
+
+        .brand span { color: var(--yellow-light); }
+        
+        .erc-logo { 
+            height: 34px; 
+            width: auto;
+            object-fit: contain;
+        }
+
+        #map { 
+            height: calc(100vh - var(--header-height)); 
+            width: 100vw; 
+            margin-top: var(--header-height); 
+        }
+        
+        #ui-panel {
+            position: absolute; 
+            top: calc(var(--header-height) + 10px); 
+            right: 15px; 
+            z-index: 1000;
+            background: var(--bg-glass); 
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(0,0,0,0.1);
+            width: 280px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            max-height: calc(90vh - var(--header-height));
+        }
+
+        .panel-title { 
+            font-size: 10px; 
+            font-weight: 800; 
+            letter-spacing: 1.5px; 
+            text-transform: uppercase; 
+            color: #5f6368; 
+            margin-bottom: 10px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-btn {
+            background: none;
+            border: 1.5px solid #5f6368;
+            color: #5f6368;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        select { 
+            width: 100%; 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 1px solid #dadce0; 
+            font-size: 13px; 
+            background: white; 
+            cursor: pointer; 
+            outline: none;
+        }
+
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 11px;
+            color: #5f6368;
+        }
+        .swatch {
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+            border-radius: 2px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        #pixel-info { 
+            font-size: 13px; 
+            margin-top: 12px; 
+            overflow-y: auto; 
+            border-top: 1px solid #ddd; 
+            padding-top: 12px; 
+            flex-grow: 1;
+        }
+
+        .val-row { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 4px 0; 
+            border-bottom: 1px solid rgba(0,0,0,0.05); 
+        }
+        
+        .val-num { 
+            font-weight: 700; 
+            font-family: monospace; 
+        }
+
+        /* Modal Styles */
+        #modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        #modal-overlay.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        #data-modal {
+            background: white;
+            width: 90%;
+            max-width: 600px;
+            max-height: 85vh;
+            border-radius: 12px;
+            padding: 30px;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        #data-modal h2 { margin-top: 0; font-size: 1.5rem; color: var(--primary-dark); }
+        #data-modal p { line-height: 1.6; font-size: 0.95rem; color: #444; }
+        .modal-close {
+            position: sticky;
+            bottom: -30px;
+            margin: 20px -30px -30px -30px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+            padding: 15px;
+            text-align: right;
+        }
+        .btn-close {
+            background: var(--primary-dark);
+            color: white;
+            border: none;
+            padding: 8px 25px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .warning-box {
+            background: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 0.9rem;
+        }
+        .data-links {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
+        .data-links a {
+            display: inline-block;
+            margin-right: 15px;
+            color: var(--accent-red);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .data-links a:hover { text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            #ui-panel { width: calc(100vw - 30px); bottom: 15px; max-height: 40vh; top: auto; }
+            #data-modal { padding: 20px; width: 85%; }
+        }
     </style>
 </head>
 <body>
 
+<nav id="nav-header">
+    <a href="https://minethegap.eu" class="brand"><span>MINE-THE-GAP</span></a>
+    <img src="https://erc.europa.eu/sites/default/files/2025-08/LOGO_ERC-FLAG_EU.png" alt="ERC & EU Flag" class="erc-logo">
+</nav>
+
 <div id="ui-panel">
-    <div style="font-weight:bold; font-size: 14px; color: #333;">GLOBAL MATERIAL AREAS</div>
-    <select id="layer-select"><option>Initialising...</option></select>
-    <div id="pixel-info">Click the map to query data</div>
-    <div class="hint">Units: km² (scaled by 1/10)</div>
+    <div class="panel-title">
+        Mining land use by material
+        <button class="info-btn" onclick="toggleModal(true)">?</button>
+    </div>
+    <select id="layer-select"><option>Initializing...</option></select>
+    
+    <div class="legend">
+        <div class="legend-item"><div class="swatch" style="background: #FFFFCC;"></div> < 5 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #FFEDA0;"></div> 5 - 20 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #FED976;"></div> 20 - 50 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #FEB24C;"></div> 50 - 100 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #FD8D3C;"></div> 100 - 250 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #F03B20;"></div> 250 - 500 km²</div>
+        <div class="legend-item"><div class="swatch" style="background: #BD0026;"></div> > 500 km²</div>
+    </div>
+
+    <div id="pixel-info">
+        <div style="color: #70757a; font-style: italic; font-size: 12px; line-height: 1.5;">
+            Click on the map to query mining land use across 86 materials.
+        </div>
+    </div>
+</div>
+
+<!-- Information Modal -->
+<div id="modal-overlay">
+    <div id="data-modal">
+        <h2>About the Data</h2>
+        <p>This interactive map visualises estimated spatial mining areas for 86 materials globally, derived from mining cluster data. The goal is to provide an overview of how land is used for material extraction at a global scale.</p>
+        
+        <div class="warning-box">
+            <strong>Important: Layers are not additive.</strong><br>
+            The values for different material layers <u>cannot</u> be summed to calculate total mining area. In many locations, multiple materials are co-extracted from the same geographic area. Adding these values would result in significant double-counting.
+        </div>
+
+        <p><strong>Citation:</strong><br>
+        Maus, V., et al. (2025). A Data-Driven Approach to Mapping Global Commodity-Specific Mining Land-Use. SSRN. 
+        <a href="https://dx.doi.org/10.2139/ssrn.5408302" target="_blank" style="color:var(--accent-red)">https://dx.doi.org/10.2139/ssrn.5408302</a></p>
+
+        <p><strong>Licence:</strong> CC-BY-SA-NC</p>
+
+        <div class="data-links">
+            <a href="assets/data/material_areas_km2.tif" download>Download COG (.tif)</a>
+            <a href="assets/data/README.txt" target="_blank">View README</a>
+        </div>
+
+        <div class="modal-close">
+            <button class="btn-close" onclick="toggleModal(false)">Close</button>
+        </div>
+    </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    const cogUrl = "material_areas_km2.tif";
+    const cogUrl = "assets/data/material_areas_km2.tif";
     const NODATA = 65535;
     const materials = ["Gold", "Coal", "Silver", "Copper", "Iron", "Zinc", "Molybdenum", "Lead", "Potash", "Lithium", "Nickel", "Cobalt", "Platinum_Group_Element", "Diamonds", "Phosphate", "Aluminium", "Magnetite", "Uranium", "Manganese", "Magnesium", "Rhodium", "Potassium", "Spodumene", "Zircon", "Tin", "Heavy_Mineral_Sands", "Titanium", "Rare_Earth_Element", "Rhenium", "Tungsten", "Chromite", "Antimony", "Niobium", "Vanadium", "Tantalum", "Calcine", "Kaolin", "Leucoxene", "Graphite", "Chromium", "Bismuth", "Ferrochrome", "Rubidium", "Mercury", "Cadmium", "Selenium", "Tellurium", "Arsenic", "Ferronickel", "Sulphuric_Acid", "Gallium", "Strontium", "Germanium", "Indium", "Limestone", "Calcium_Carbonate", "Barite", "Ammonium_Sulfate", "Coke", "Crude_Oil", "Tar", "Sodium_Tripolyphosphate", "Asbestos", "Ferroniobium", "Beryllium", "Garnet", "Ferrovanadium", "Caesium", "Ferrotungsten", "Aggregates", "Hematite", "Dolomite", "Nepheline", "Silica", "Sulfur", "Marble", "Borates", "Rutile", "Vermiculite", "Pyrite", "Gypsum", "Frac_Sand", "Emerald", "Beryl", "Sapphire", "Fluorspar"];
 
-    const map = L.map('map', { 
-        center: [15, 0], 
-        zoom: 2,
-        minZoom: 1,
-        maxZoom: 10
-    });
-    
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
-        attribution: '&copy; CartoDB' 
-    }).addTo(map);
-
-    let tiff, image, rasterLayer, currentBandData;
-    let width, height, origin, res, bbox;
-
-    async function init() {
-        tiff = await GeoTIFF.fromUrl(cogUrl);
-        image = await tiff.getImage();
-        width = image.getWidth();
-        height = image.getHeight();
-        origin = image.getOrigin(); // [x, y]
-        res = image.getResolution(); // [x, y]
-        bbox = image.getBoundingBox();
-
-        const select = document.getElementById('layer-select');
-        select.innerHTML = '';
-        materials.forEach((m, i) => {
-            const opt = document.createElement('option');
-            opt.value = i;
-            opt.innerText = m.replace(/_/g, ' ');
-            select.appendChild(opt);
-        });
-
-        select.onchange = async (e) => {
-            const band = await image.readRasters({ samples: [parseInt(e.target.value)] });
-            currentBandData = band[0];
-            rasterLayer.redraw();
-        };
-
-        // Initialize first band (Gold)
-        const band = await image.readRasters({ samples: [0] });
-        currentBandData = band[0];
-
-        setupLayer();
-        map.on('click', onMapClick);
+    function toggleModal(show) {
+        document.getElementById('modal-overlay').classList.toggle('active', show);
     }
 
-    function setupLayer() {
-        rasterLayer = L.gridLayer({ 
-            attribution: 'Maus et al. 2025',
-            opacity: 0.8
-        });
+    const map = L.map('map', { center: [20, 0], zoom: 2, minZoom: 2, maxZoom: 12, zoomControl: false });
+    map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+    const baseLayers = {
+        "Dark Map": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' 
+        }).addTo(map),
+        "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+            attribution: 'Tiles &copy; Esri' 
+        })
+    };
+    L.control.layers(baseLayers, null, { position: 'topleft' }).addTo(map);
+
+    map.on('baselayerchange', () => { if (rasterLayer) rasterLayer.bringToFront(); });
+
+    let tiff, image, rasterLayer, currentBandData, width, height, origin, res, clickMarker;
+
+    async function initMapTool() {
+        try {
+            tiff = await GeoTIFF.fromUrl(cogUrl);
+            image = await tiff.getImage();
+            width = image.getWidth(); height = image.getHeight();
+            origin = image.getOrigin(); res = image.getResolution();
+
+            const select = document.getElementById('layer-select');
+            select.innerHTML = '';
+            materials.forEach((m, i) => {
+                const opt = document.createElement('option');
+                opt.value = i; opt.innerText = m.replace(/_/g, ' ');
+                select.appendChild(opt);
+            });
+
+            select.onchange = async (e) => {
+                const bandIndex = parseInt(e.target.value);
+                const raster = await image.readRasters({ samples: [bandIndex] });
+                currentBandData = raster[0];
+                if (rasterLayer) { rasterLayer.redraw(); rasterLayer.bringToFront(); }
+            };
+
+            const initialBand = await image.readRasters({ samples: [0] });
+            currentBandData = initialBand[0];
+            setupGridLayer();
+            map.on('click', handleMapClick);
+        } catch (err) { console.error(err); }
+    }
+
+    function setupGridLayer() {
+        rasterLayer = L.gridLayer({ opacity: 0.85, zIndex: 1000 });
         rasterLayer.createTile = function(coords) {
             const tile = document.createElement('canvas');
             tile.width = tile.height = 256;
             const ctx = tile.getContext('2d');
             const imgData = ctx.createImageData(256, 256);
-
-            // Calculate geographic bounds of this tile
-            const nw = map.unproject(coords.multiplyBy(256), coords.z);
-            const se = map.unproject(coords.add([1, 1]).multiplyBy(256), coords.z);
-
-            // Step through tile pixels
             for (let y = 0; y < 256; y++) {
                 for (let x = 0; x < 256; x++) {
-                    // Map tile pixel back to geographic Lat/Lng
                     const p = map.unproject(coords.multiplyBy(256).add([x, y]), coords.z);
-                    
-                    // Map Lat/Lng to Raster Index
                     const rX = Math.floor((p.lng - origin[0]) / res[0]);
                     const rY = Math.floor((p.lat - origin[1]) / res[1]);
-
                     if (rX >= 0 && rX < width && rY >= 0 && rY < height) {
                         const val = currentBandData[rY * width + rX];
                         if (val !== NODATA && val > 0) {
                             const idx = (y * 256 + x) * 4;
-                            imgData.data[idx] = 255;   // Red
-                            imgData.data[idx+1] = val > 1000 ? 50 : 180; // Green (Orange tint)
-                            imgData.data[idx+2] = 0;   // Blue
-                            imgData.data[idx+3] = 220; // Alpha
+                            let c;
+                            if (val < 50) c = [255,255,204,180];
+                            else if (val < 200) c = [255,237,160,200];
+                            else if (val < 500) c = [254,217,118,220];
+                            else if (val < 1000) c = [254,178,76,230];
+                            else if (val < 2500) c = [253,141,60,240];
+                            else if (val < 5000) c = [240,59,32,250];
+                            else c = [189,0,38,255];
+                            imgData.data[idx] = c[0]; imgData.data[idx+1] = c[1];
+                            imgData.data[idx+2] = c[2]; imgData.data[idx+3] = c[3];
                         }
                     }
                 }
@@ -127,39 +391,31 @@
             ctx.putImageData(imgData, 0, 0);
             return tile;
         };
-        rasterLayer.addTo(map);
+        rasterLayer.addTo(map).bringToFront();
     }
 
-    async function onMapClick(e) {
+    async function handleMapClick(e) {
+        if (clickMarker) map.removeLayer(clickMarker);
+        clickMarker = L.marker(e.latlng).addTo(map);
         const info = document.getElementById('pixel-info');
-        info.innerHTML = '<em>Sifting layers...</em>';
-        
+        info.innerHTML = '<div style="color:#888; font-style:italic; padding: 10px 0;">Sampling all layers...</div>';
         const rX = Math.floor((e.latlng.lng - origin[0]) / res[0]);
         const rY = Math.floor((e.latlng.lat - origin[1]) / res[1]);
-
-        if (rX < 0 || rX >= width || rY < 0 || rY >= height) {
-            info.innerHTML = "Outside coverage.";
-            return;
-        }
-
+        if (rX < 0 || rX >= width || rY < 0 || rY >= height) return;
         const fullImage = await tiff.getImage(0);
-        const pixelData = await fullImage.readRasters({
-            window: [rX, rY, rX + 1, rY + 1]
-        });
-
-        let html = `<strong>Location:</strong> ${e.latlng.lat.toFixed(1)}, ${e.latlng.lng.toFixed(1)}<hr>`;
-        let found = false;
+        const pixelSample = await fullImage.readRasters({ window: [rX, rY, rX + 1, rY + 1] });
+        let html = ""; let foundAny = false;
         materials.forEach((m, i) => {
-            const val = pixelData[i][0];
+            const val = pixelSample[i][0];
             if (val !== NODATA && val > 0) {
-                found = true;
-                html += `<div class="val-row"><span>${m.replace(/_/g, ' ')}</span><span class="val-num">${(val/10).toFixed(1)}</span></div>`;
+                foundAny = true;
+                html += `<div class="val-row"><span>${m.replace(/_/g, ' ')}</span><span class="val-num">${(val/10).toFixed(1)} km²</span></div>`;
             }
         });
-        info.innerHTML = found ? html : "No data detected.";
+        info.innerHTML = foundAny ? html : "No mining detected.";
     }
 
-    init();
+    window.onload = initMapTool;
 </script>
 
 </body>
