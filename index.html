@@ -266,7 +266,7 @@
 
 <div id="ui-panel">
     <div class="panel-title">
-        Global Mining Area By Material
+        Global Mining Land Use
         <button class="info-btn" onclick="toggleModal(true)">?</button>
     </div>
     <select id="layer-select"><option>Initializing...</option></select>
@@ -292,10 +292,10 @@
 <!-- Information Modal -->
 <div id="modal-overlay">
     <div id="data-modal">
-        <h2>Global Mining Area By Material</h2>
-        <p>This interactive map provides an overview of the mining area linked to the extraction of different materials globally.</p>
+        <h2>Global Mining Land Use</h2>
+        <p>This interactive map provides an overview of the mining area linked to the extraction of different materials globally. The area was calculated based on mining land use polygons with associated materials, including primary materials and byproducts.</p>
 
-        <p><strong>Citation:</strong><br>
+        <p><strong>Data citation:</strong><br>
         Maus, V., et al. (2025). A Data-Driven Approach to Mapping Global Commodity-Specific Mining Land-Use. SSRN. 
         <a href="https://dx.doi.org/10.2139/ssrn.5408302" target="_blank" style="color:#000">https://dx.doi.org/10.2139/ssrn.5408302</a></p>
         
@@ -330,8 +330,9 @@
     document.getElementById('readme-link').href = readmeUrl;
     document.getElementById('cog-link-display').innerText = `https://maps.minethegap.eu/${cogUrl}`;
 
-    const NODATA = 65535;
-    const materials = ["Gold", "Coal", "Silver", "Copper", "Iron", "Zinc", "Molybdenum", "Lead", "Potash", "Lithium", "Nickel", "Cobalt", "Platinum_Group_Element", "Diamonds", "Phosphate", "Aluminium", "Magnetite", "Uranium", "Manganese", "Magnesium", "Rhodium", "Potassium", "Spodumene", "Zircon", "Tin", "Heavy_Mineral_Sands", "Titanium", "Rare_Earth_Element", "Rhenium", "Tungsten", "Chromite", "Antimony", "Niobium", "Vanadium", "Tantalum", "Calcine", "Kaolin", "Leucoxene", "Graphite", "Chromium", "Bismuth", "Ferrochrome", "Rubidium", "Mercury", "Cadmium", "Selenium", "Tellurium", "Arsenic", "Ferronickel", "Sulphuric_Acid", "Gallium", "Strontium", "Germanium", "Indium", "Limestone", "Calcium_Carbonate", "Barite", "Ammonium_Sulfate", "Coke", "Crude_Oil", "Tar", "Sodium_Tripolyphosphate", "Asbestos", "Ferroniobium", "Beryllium", "Garnet", "Ferrovanadium", "Caesium", "Ferrotungsten", "Aggregates", "Hematite", "Dolomite", "Nepheline", "Silica", "Sulfur", "Marble", "Borates", "Rutile", "Vermiculite", "Pyrite", "Gypsum", "Frac_Sand", "Emerald", "Beryl", "Sapphire", "Fluorspar"];
+    // Global state - initialized from metadata
+    let NODATA = 65535;
+    let materials = [];
 
     function toggleModal(show) {
         document.getElementById('modal-overlay').classList.toggle('active', show);
@@ -362,12 +363,56 @@
 
     let tiff, image, rasterLayer, currentBandData, width, height, origin, res, clickMarker;
 
+    /**
+     * More robust GDAL metadata parser.
+     * Looks for <Item name="DESCRIPTION" sample="X"> or <Item name="BAND_X">
+     */
+    function parseGdalMetadata(xmlString) {
+        if (!xmlString) return {};
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const items = xmlDoc.getElementsByTagName("Item");
+        const meta = {};
+        for (let i = 0; i < items.length; i++) {
+            const name = items[i].getAttribute("name");
+            const sample = items[i].getAttribute("sample");
+            const text = items[i].textContent.trim();
+            
+            if (name === "DESCRIPTION" && sample !== null) {
+                const idx = parseInt(sample);
+                meta[idx] = text;
+            } else if (name && name.startsWith("BAND_")) {
+                const idx = parseInt(name.replace("BAND_", "")) - 1;
+                meta[idx] = text;
+            }
+        }
+        return meta;
+    }
+
     async function initMapTool() {
         try {
             tiff = await GeoTIFF.fromUrl(cogUrl);
             image = await tiff.getImage();
-            width = image.getWidth(); height = image.getHeight();
-            origin = image.getOrigin(); res = image.getResolution();
+            
+            // Extract NODATA
+            const gdalNoData = image.getGDALNoData();
+            if (gdalNoData !== null) NODATA = gdalNoData;
+
+            // Extract Band Labels
+            const numBands = image.getSamplesPerPixel();
+            const gdalMeta = image.fileDirectory.GDAL_METADATA;
+            
+            const descriptions = parseGdalMetadata(gdalMeta);
+            materials = [];
+            for (let i = 0; i < numBands; i++) {
+                // Use metadata description, otherwise fallback to "Band X"
+                materials.push(descriptions[i] || `Band ${i + 1}`);
+            }
+
+            width = image.getWidth(); 
+            height = image.getHeight();
+            origin = image.getOrigin(); 
+            res = image.getResolution();
 
             const select = document.getElementById('layer-select');
             select.innerHTML = '';
@@ -388,7 +433,7 @@
             currentBandData = initialBand[0];
             setupGridLayer();
             map.on('click', handleMapClick);
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("Initialization Error:", err); }
     }
 
     function setupGridLayer() {
