@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Global Mining Explorer | MINE-THE-GAP</title>
+    <title>Global Mine Explorer | MINE-THE-GAP</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
@@ -306,10 +306,10 @@
 
         <div class="data-links">
             <p><strong>Licence:</strong> <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a></p>
-            <p><a href="assets/data/README.txt" target="_blank">View README</a></p>
-            <p><a href="assets/data/material_areas_km2.tif" download>Download (.tif) file</a></p>
+            <p><a id="readme-link" href="#" target="_blank">View README</a></p>
+            <p><a id="download-link" href="#" download>Download (.tif) file</a></p>
             <p>Direct COG access:</p>
-            <span class="code-block">https://maps.minethegap.eu/assets/data/material_areas_km2.tif</span>
+            <span id="cog-link-display" class="code-block">Loading...</span>
         </div>
 
         <div class="modal-close">
@@ -321,7 +321,15 @@
 <div id="map"></div>
 
 <script>
-    const cogUrl = "assets/data/material_areas_km2.tif";
+    const DATA_VERSION = "20251227";
+    const cogUrl = `assets/data/material_areas_km2-${DATA_VERSION}.tif`;
+    const readmeUrl = `assets/data/material_areas_km2-${DATA_VERSION}.txt`;
+    
+    // Update Modal links on load
+    document.getElementById('download-link').href = cogUrl;
+    document.getElementById('readme-link').href = readmeUrl;
+    document.getElementById('cog-link-display').innerText = `https://maps.minethegap.eu/${cogUrl}`;
+
     const NODATA = 65535;
     const materials = ["Gold", "Coal", "Silver", "Copper", "Iron", "Zinc", "Molybdenum", "Lead", "Potash", "Lithium", "Nickel", "Cobalt", "Platinum_Group_Element", "Diamonds", "Phosphate", "Aluminium", "Magnetite", "Uranium", "Manganese", "Magnesium", "Rhodium", "Potassium", "Spodumene", "Zircon", "Tin", "Heavy_Mineral_Sands", "Titanium", "Rare_Earth_Element", "Rhenium", "Tungsten", "Chromite", "Antimony", "Niobium", "Vanadium", "Tantalum", "Calcine", "Kaolin", "Leucoxene", "Graphite", "Chromium", "Bismuth", "Ferrochrome", "Rubidium", "Mercury", "Cadmium", "Selenium", "Tellurium", "Arsenic", "Ferronickel", "Sulphuric_Acid", "Gallium", "Strontium", "Germanium", "Indium", "Limestone", "Calcium_Carbonate", "Barite", "Ammonium_Sulfate", "Coke", "Crude_Oil", "Tar", "Sodium_Tripolyphosphate", "Asbestos", "Ferroniobium", "Beryllium", "Garnet", "Ferrovanadium", "Caesium", "Ferrotungsten", "Aggregates", "Hematite", "Dolomite", "Nepheline", "Silica", "Sulfur", "Marble", "Borates", "Rutile", "Vermiculite", "Pyrite", "Gypsum", "Frac_Sand", "Emerald", "Beryl", "Sapphire", "Fluorspar"];
 
