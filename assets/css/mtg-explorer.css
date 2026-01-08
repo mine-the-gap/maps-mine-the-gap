@@ -5,10 +5,23 @@ body {
     overflow: hidden; 
 }
 
+/* mtg-explorer.css */
+
+/* mtg-explorer.css */
+
 #map { 
-    height: calc(100vh - var(--header-height)); 
-    width: 100vw; 
-    margin-top: var(--header-height); 
+    position: absolute; 
+    top: 0;           /* Ignore the header height, go to absolute top */
+    bottom: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;     /* Force full screen height */
+    margin: 0 !important; 
+    z-index: 1; 
+}
+
+.leaflet-top {
+    top: var(--header-height) !important; 
 }
 
 /* Floating UI Panel */
@@ -129,4 +142,13 @@ select {
     .leaflet-right .leaflet-control {
         margin-right: 15px; 
     }
-} 
+}
+
+project-header {
+    display: block;
+    height: 0;
+    line-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+}

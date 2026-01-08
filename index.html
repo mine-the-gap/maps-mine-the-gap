@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MINE-THE-GAP Explore</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Where, when, what, and how much is mined. Research by Victor Maus.">
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&family=Montserrat:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet">
+
     <!-- Leaflet & GeoTIFF.js -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -12,21 +17,15 @@
 
     <!-- Custom MINE-THE-GAP Styles -->
     <link rel="stylesheet" href="https://minethegap.eu/assets/css/mtg.css" />
-    <!-- <link rel="stylesheet" href="assets/css/mtg.css" /> -->
+    <!-- <link rel="stylesheet" href="/assets/css/mtg.css" /> -->
+    <script src="https://minethegap.eu/assets/js/header.js" defer></script>
     <link rel="stylesheet" href="assets/css/mtg-explorer.css" />
 
 </head>
 <body>
 
-<nav id="nav-header">
-    <a href="https://minethegap.eu" class="brand" style="display: flex; align-items: center; gap: 8px;">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="color: var(--yellow-light);">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-    </svg>
-    <span>MINE-THE-GAP</span>
-</a>
-    <img src="https://erc.europa.eu/sites/default/files/2025-08/LOGO_ERC-FLAG_EU.png" alt="ERC & EU Flag" class="erc-logo">
-</nav>
+    <!-- Reusable Header Tag -->
+    <project-header></project-header>
 
 <div id="ui-panel">
     <div class="panel-title">
@@ -60,8 +59,8 @@
         <p>This interactive map provides an overview of the mining area linked to the extraction of different materials globally. The area was calculated based on mining land use polygons with associated materials, including primary materials and byproducts.</p>
 
         <p><strong>Data citation:</strong><br>
-        Maus, V., et al. (2025). A Data-Driven Approach to Mapping Global Commodity-Specific Mining Land-Use. SSRN. 
-        <a href="https://dx.doi.org/10.2139/ssrn.5408302" target="_blank">https://dx.doi.org/10.2139/ssrn.5408302</a></p>
+        Maus, V., et al. (2025). A data-driven approach to mapping global commodity-specific mining land-use. Journal of Cleaner Production 
+        <a href="https://doi.org/10.1016/j.jclepro.2025.147437" target="_blank">10.1016/j.jclepro.2025.147437</a></p>
         
         <div class="warning-box">
             <strong>Important: Layers are not additive.</strong><br>
@@ -113,13 +112,22 @@
     map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+    // Define layers separately to ensure clean initialization
+    const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' 
+    });
+
+    const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' 
+    });
+
+    // Add default layer
+    darkLayer.addTo(map);
+
+    // Add Control
     const baseLayers = {
-        "Dark Map": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' 
-        }).addTo(map),
-        "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' 
-        })
+        "Dark Map": darkLayer,
+        "Satellite": satLayer
     };
     L.control.layers(baseLayers, null, { position: 'topleft' }).addTo(map);
 
@@ -127,10 +135,6 @@
 
     let tiff, image, rasterLayer, currentBandData, width, height, origin, res, clickMarker;
 
-    /**
-     * More robust GDAL metadata parser.
-     * Looks for <Item name="DESCRIPTION" sample="X"> or <Item name="BAND_X">
-     */
     function parseGdalMetadata(xmlString) {
         if (!xmlString) return {};
         const parser = new DOMParser();
