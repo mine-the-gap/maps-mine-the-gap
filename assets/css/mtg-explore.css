@@ -70,7 +70,6 @@ body {
     top: 70px !important; /* Brand height + padding */
 }
 
-/* Floating UI Panel - Adjust position since header is gone */
 #ui-panel {
     position: absolute; 
     top: 15px; /* Aligned with brand */
@@ -179,7 +178,7 @@ select {
     #ui-panel {
         width: 260px;
         right: 10px;
-        top: 10px;
+        top: 50px;
         padding: 12px;
     }
     .brand-overlay {
@@ -197,4 +196,8 @@ select {
     .leaflet-right .leaflet-control {
         margin-right: 15px; 
     }
+}
+
+.leaflet-bottom.leaflet-left {
+  margin-bottom: 50px; 
 }
