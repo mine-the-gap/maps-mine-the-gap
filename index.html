@@ -114,43 +114,49 @@
     }
 
     // Function to copy COG link to clipboard
-    function copyCogLink() {
+    async function copyCogLink() {
         const text = document.getElementById('cog-link-display').textContent;
+        const btn = document.getElementById('copy-btn');
         
+        // Helper to show success state (visual feedback)
+        const showSuccess = () => {
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            btn.style.color = "#137333";
+            btn.style.borderColor = "#137333";
+            btn.style.backgroundColor = "#e6f4ea";
+            setTimeout(() => {
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+                btn.style.color = "#70757a";
+                btn.style.borderColor = "#dadce0";
+                btn.style.backgroundColor = "#ffffff";
+            }, 2000);
+        };
+
+        // 1. Try Modern API (HTTPS required)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showSuccess();
+                return;
+            } catch (err) {
+                console.warn('Clipboard API failed, trying fallback...', err);
+            }
+        }
+
+        // 2. Fallback to Legacy execCommand (for older browsers or HTTP)
         const textArea = document.createElement("textarea");
         textArea.value = text;
-        
-        textArea.style.position = 'fixed';
+        textArea.style.position = 'fixed'; // Avoid scrolling to bottom
         textArea.style.left = '-9999px';
-        textArea.style.top = '0';
-        
         document.body.appendChild(textArea);
-        
         textArea.focus();
         textArea.select();
-        textArea.setSelectionRange(0, 99999); // For mobile devices
         
         try {
             const successful = document.execCommand('copy');
-            if (successful) {
-                const btn = document.getElementById('copy-btn');
-                
-                // Visual feedback: Switch to green checkmark
-                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-                btn.style.color = "#137333";
-                btn.style.borderColor = "#137333";
-                btn.style.backgroundColor = "#e6f4ea";
-                
-                setTimeout(() => {
-                    // Revert to copy icon
-                    btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-                    btn.style.color = "#70757a";
-                    btn.style.borderColor = "#dadce0";
-                    btn.style.backgroundColor = "#ffffff";
-                }, 2000);
-            }
+            if (successful) showSuccess();
         } catch (err) {
-            console.error('Unable to copy', err);
+            console.error('Fallback copy failed', err);
         }
         document.body.removeChild(textArea);
     }
@@ -189,10 +195,24 @@
 
     let tiff, image, rasterLayer, currentBandData, width, height, origin, res, clickMarker;
 
-    function parseGdalMetadata(xmlString) {
+function parseGdalMetadata(xmlString) {
         if (!xmlString) return {};
+        
+        // --- FIX START: Sanitize the string ---
+        // Remove null bytes (\u0000) which break Firefox DOMParser
+        // and trim whitespace.
+        const cleanXml = xmlString.replace(/\u0000/g, '').trim();
+        // --- FIX END ---
+
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const xmlDoc = parser.parseFromString(cleanXml, "text/xml");
+
+        const parseError = xmlDoc.getElementsByTagName("parsererror");
+        if (parseError.length > 0) {
+            console.warn("GDAL Metadata XML Parse Error:", parseError[0].textContent);
+            return {};
+        }
+
         const items = xmlDoc.getElementsByTagName("Item");
         const meta = {};
         for (let i = 0; i < items.length; i++) {

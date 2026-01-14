@@ -89,6 +89,8 @@ body {
     flex-direction: column;
     overflow-y: auto;
     transition: all 0.2s ease-in-out;
+    max-height: calc(100vh - 30px);
+    max-height: calc(100dvh - 30px); 
 }
 
 .panel-title { 
